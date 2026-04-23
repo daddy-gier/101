@@ -211,7 +211,8 @@ const SIZES = ["S","M","L","XL"];
 
 function seed() {
   const today = new Date();
-  const iso = d => d.toISOString().slice(0,10);
+  const pad = n => String(n).padStart(2,"0");
+  const iso = d => d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate());
   const plusDays = n => { const d = new Date(today); d.setDate(d.getDate()+n); return iso(d); };
 
   const slips = [
@@ -261,7 +262,11 @@ let state = load();
 
 /* -------------------------------- helpers -------------------------------- */
 
-const today = () => new Date().toISOString().slice(0,10);
+const today = () => {
+  const d = new Date();
+  const pad = n => String(n).padStart(2,"0");
+  return d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate());
+};
 const daysBetween = (a,b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 const fmtMoney = n => "$" + (Number(n)||0).toLocaleString(undefined, {maximumFractionDigits:0});
 const byId = (arr,id) => arr.find(x => x.id === id);
@@ -311,8 +316,8 @@ function renderDashboard() {
       const d = daysBetween(t, r.end);
       return `<div class="flex justify-between items-center border-b last:border-0 py-1.5">
         <div>
-          <div class="font-medium">${slip ? slip.number : "?"} — ${cust ? cust.name : "?"}</div>
-          <div class="text-xs text-slate-500">ends ${r.end} · ${fmtMoney(r.rate)}/mo</div>
+          <div class="font-medium">${slip ? esc(slip.number) : "?"} — ${cust ? esc(cust.name) : "?"}</div>
+          <div class="text-xs text-slate-500">ends ${esc(r.end)} · ${fmtMoney(r.rate)}/mo</div>
         </div>
         <span class="chip ${d<=7?'bg-rose-100 text-rose-700':'bg-amber-100 text-amber-700'}">${d} days</span>
       </div>`;
@@ -555,10 +560,34 @@ function rentalForm(existing) {
     {name:"paidThru",   label:"Paid through", type:"date"},
     {name:"status",     label:"Status",    type:"select", options:["active","ended"]},
   ], existing, data => {
+    if (data.status === "active") {
+      const conflict = findRentalConflict(data, existing && existing.id);
+      if (conflict) {
+        const slip = byId(state.slips, data.slipId);
+        const cust = byId(state.customers, conflict.customerId);
+        alert(`Cannot save: slip ${slip ? slip.number : ""} already has an active rental`
+          + (cust ? ` for ${cust.name}` : "")
+          + ` from ${conflict.start || "?"} to ${conflict.end || "?"}.\n\n`
+          + `End that rental first, or change this one's status to "ended".`);
+        return;
+      }
+    }
     if (existing) Object.assign(existing, data);
     else state.rentals.push({id:uid(), ...data});
     save(state); renderAll();
   });
+}
+function findRentalConflict(data, excludeId) {
+  const FAR_PAST = "0000-01-01", FAR_FUTURE = "9999-12-31";
+  const aStart = data.start || FAR_PAST;
+  const aEnd   = data.end   || FAR_FUTURE;
+  return state.rentals.find(r =>
+    r.id !== excludeId
+    && r.slipId === data.slipId
+    && r.status === "active"
+    && (r.start || FAR_PAST) <= aEnd
+    && aStart <= (r.end || FAR_FUTURE)
+  );
 }
 document.getElementById("rentals-body").addEventListener("click", e => {
   const ed = e.target.closest("[data-edit-rent]");
