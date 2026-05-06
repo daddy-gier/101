@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>DockMaster — Boat Slip Manager</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .tab-btn.active { background:#0f172a; color:#fff; }
+  .chip { display:inline-flex; align-items:center; padding:.125rem .5rem; border-radius:9999px; font-size:.72rem; font-weight:600; }
+  dialog::backdrop { background: rgba(15,23,42,.55); }
+  input, select, textarea { background:#fff; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen">
+
+<header class="bg-gradient-to-r from-sky-700 to-cyan-600 text-white shadow">
+  <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="text-3xl">⚓</div>
+      <div>
+        <div class="text-xl font-bold leading-tight">DockMaster</div>
+        <div class="text-xs text-sky-100">Nick's Boat Slip Business</div>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button id="btn-export" class="text-sm bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded">Export</button>
+      <button id="btn-import" class="text-sm bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded">Import</button>
+      <button id="btn-reset"  class="text-sm bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded">Reset demo</button>
+      <input id="file-import" type="file" accept="application/json" class="hidden" />
+    </div>
+  </div>
+  <nav class="max-w-6xl mx-auto px-4 pb-3 flex flex-wrap gap-2">
+    <button data-tab="dashboard" class="tab-btn active px-3 py-1.5 rounded-full text-sm bg-white/15 hover:bg-white/25">Dashboard</button>
+    <button data-tab="slips"     class="tab-btn px-3 py-1.5 rounded-full text-sm bg-white/15 hover:bg-white/25">Slips</button>
+    <button data-tab="customers" class="tab-btn px-3 py-1.5 rounded-full text-sm bg-white/15 hover:bg-white/25">Customers</button>
+    <button data-tab="rentals"   class="tab-btn px-3 py-1.5 rounded-full text-sm bg-white/15 hover:bg-white/25">Rentals</button>
+    <button data-tab="waitlist"  class="tab-btn px-3 py-1.5 rounded-full text-sm bg-white/15 hover:bg-white/25">Waitlist</button>
+  </nav>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-6">
+
+  <!-- DASHBOARD -->
+  <section id="tab-dashboard" class="tab-panel">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-xs uppercase text-slate-500">Occupancy</div>
+        <div id="kpi-occupancy" class="text-3xl font-bold text-sky-700">—</div>
+        <div id="kpi-occupancy-sub" class="text-xs text-slate-500">—</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-xs uppercase text-slate-500">Monthly revenue</div>
+        <div id="kpi-mrr" class="text-3xl font-bold text-emerald-600">—</div>
+        <div class="text-xs text-slate-500">active rentals</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-xs uppercase text-slate-500">Available slips</div>
+        <div id="kpi-available" class="text-3xl font-bold text-amber-600">—</div>
+        <div id="kpi-available-sub" class="text-xs text-slate-500">by size</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-xs uppercase text-slate-500">Expiring &lt;30d</div>
+        <div id="kpi-expiring" class="text-3xl font-bold text-rose-600">—</div>
+        <div class="text-xs text-slate-500">revenue at risk</div>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-4">
+      <div class="bg-white rounded-lg shadow p-4">
+        <h3 class="font-semibold mb-3">Expiring soon</h3>
+        <div id="expiring-list" class="space-y-2 text-sm"></div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <h3 class="font-semibold mb-3">Slip mix</h3>
+        <div id="mix-list" class="space-y-2 text-sm"></div>
+      </div>
+    </div>
+
+    <div class="mt-6 bg-sky-50 border border-sky-200 rounded-lg p-4 text-sm text-sky-900">
+      <b>Tip for Nick:</b> track paid-through dates on each rental. When
+      "Expiring &lt;30d" fills up, reach out with renewal offers — the waitlist
+      tab shows exactly who's hungry for each size, so empty slips get refilled
+      the same week.
+    </div>
+  </section>
+
+  <!-- SLIPS -->
+  <section id="tab-slips" class="tab-panel hidden">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold">Slips</h2>
+      <button id="btn-add-slip" class="bg-sky-700 hover:bg-sky-800 text-white text-sm px-3 py-1.5 rounded">+ Add slip</button>
+    </div>
+    <div class="bg-white rounded-lg shadow overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-slate-600 text-xs uppercase">
+          <tr>
+            <th class="text-left p-3">Slip #</th>
+            <th class="text-left p-3">Size</th>
+            <th class="text-left p-3">Cover</th>
+            <th class="text-left p-3">Utilities</th>
+            <th class="text-right p-3">Rate / mo</th>
+            <th class="text-left p-3">Status</th>
+            <th class="text-left p-3">Renter</th>
+            <th class="p-3"></th>
+          </tr>
+        </thead>
+        <tbody id="slips-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CUSTOMERS -->
+  <section id="tab-customers" class="tab-panel hidden">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold">Customers</h2>
+      <button id="btn-add-customer" class="bg-sky-700 hover:bg-sky-800 text-white text-sm px-3 py-1.5 rounded">+ Add customer</button>
+    </div>
+    <div class="bg-white rounded-lg shadow overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-slate-600 text-xs uppercase">
+          <tr>
+            <th class="text-left p-3">Name</th>
+            <th class="text-left p-3">Phone</th>
+            <th class="text-left p-3">Email</th>
+            <th class="text-left p-3">Boat</th>
+            <th class="text-left p-3">Length</th>
+            <th class="p-3"></th>
+          </tr>
+        </thead>
+        <tbody id="customers-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- RENTALS -->
+  <section id="tab-rentals" class="tab-panel hidden">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold">Rentals</h2>
+      <button id="btn-add-rental" class="bg-sky-700 hover:bg-sky-800 text-white text-sm px-3 py-1.5 rounded">+ New rental</button>
+    </div>
+    <div class="bg-white rounded-lg shadow overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-slate-600 text-xs uppercase">
+          <tr>
+            <th class="text-left p-3">Slip</th>
+            <th class="text-left p-3">Customer</th>
+            <th class="text-left p-3">Start</th>
+            <th class="text-left p-3">End</th>
+            <th class="text-right p-3">Rate</th>
+            <th class="text-left p-3">Paid thru</th>
+            <th class="text-left p-3">Status</th>
+            <th class="p-3"></th>
+          </tr>
+        </thead>
+        <tbody id="rentals-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- WAITLIST -->
+  <section id="tab-waitlist" class="tab-panel hidden">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold">Waitlist</h2>
+      <button id="btn-add-wait" class="bg-sky-700 hover:bg-sky-800 text-white text-sm px-3 py-1.5 rounded">+ Add prospect</button>
+    </div>
+    <div class="bg-white rounded-lg shadow overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-slate-600 text-xs uppercase">
+          <tr>
+            <th class="text-left p-3">Name</th>
+            <th class="text-left p-3">Phone</th>
+            <th class="text-left p-3">Wants size</th>
+            <th class="text-left p-3">Added</th>
+            <th class="text-left p-3">Notes</th>
+            <th class="p-3"></th>
+          </tr>
+        </thead>
+        <tbody id="wait-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<!-- Generic modal -->
+<dialog id="modal" class="rounded-lg shadow-xl p-0 w-full max-w-md">
+  <form id="modal-form" method="dialog" class="p-5">
+    <h3 id="modal-title" class="text-lg font-semibold mb-4">Edit</h3>
+    <div id="modal-fields" class="space-y-3"></div>
+    <div class="flex justify-end gap-2 mt-5">
+      <button type="button" id="modal-cancel" class="px-3 py-1.5 text-sm rounded border">Cancel</button>
+      <button type="submit" class="px-3 py-1.5 text-sm rounded bg-sky-700 text-white">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<footer class="max-w-6xl mx-auto px-4 py-6 text-xs text-slate-500">
+  Local-first. Data lives in your browser. Use <b>Export</b> for backups.
+</footer>
+
+<script>
+"use strict";
+
+const KEY = "dockmaster:v1";
+const SIZES = ["S","M","L","XL"];
+
+/* --------------------------- state & persistence -------------------------- */
+
+function seed() {
+  const today = new Date();
+  const pad = n => String(n).padStart(2,"0");
+  const iso = d => d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate());
+  const plusDays = n => { const d = new Date(today); d.setDate(d.getDate()+n); return iso(d); };
+
+  const slips = [
+    {id:uid(), number:"A-01", size:"S",  covered:false, power:true,  water:true,  rate:175},
+    {id:uid(), number:"A-02", size:"S",  covered:false, power:true,  water:true,  rate:175},
+    {id:uid(), number:"A-03", size:"M",  covered:false, power:true,  water:true,  rate:240},
+    {id:uid(), number:"B-01", size:"M",  covered:true,  power:true,  water:true,  rate:315},
+    {id:uid(), number:"B-02", size:"M",  covered:true,  power:true,  water:true,  rate:315},
+    {id:uid(), number:"B-03", size:"L",  covered:true,  power:true,  water:true,  rate:425},
+    {id:uid(), number:"B-04", size:"L",  covered:true,  power:true,  water:true,  rate:425},
+    {id:uid(), number:"C-01", size:"L",  covered:false, power:true,  water:false, rate:340},
+    {id:uid(), number:"C-02", size:"XL", covered:false, power:true,  water:true,  rate:560},
+    {id:uid(), number:"C-03", size:"XL", covered:true,  power:true,  water:true,  rate:690},
+    {id:uid(), number:"D-01", size:"S",  covered:false, power:false, water:false, rate:120},
+    {id:uid(), number:"D-02", size:"M",  covered:false, power:true,  water:false, rate:210},
+  ];
+  const customers = [
+    {id:uid(), name:"Dale Henderson", phone:"(417) 555-0142", email:"dale@example.com", boat:"Lucky Strike",   length:22, notes:""},
+    {id:uid(), name:"Megan Cruz",     phone:"(417) 555-0193", email:"megan@example.com",boat:"Sea Biscuit",    length:19, notes:"Prefers covered"},
+    {id:uid(), name:"Tom Walsh",      phone:"(417) 555-0107", email:"tom@example.com",  boat:"Reel Deal",      length:28, notes:""},
+  ];
+  const rentals = [
+    {id:uid(), slipId:slips[0].id, customerId:customers[0].id, start:plusDays(-120), end:plusDays(18),  rate:175, paidThru:plusDays(-2),  status:"active"},
+    {id:uid(), slipId:slips[3].id, customerId:customers[1].id, start:plusDays(-45),  end:plusDays(320), rate:315, paidThru:plusDays(12),  status:"active"},
+    {id:uid(), slipId:slips[5].id, customerId:customers[2].id, start:plusDays(-300), end:plusDays(65),  rate:425, paidThru:plusDays(25),  status:"active"},
+  ];
+  const waitlist = [
+    {id:uid(), name:"Jenna Price", phone:"(417) 555-0181", wantsSize:"L",  added:iso(today), notes:"Wants covered"},
+  ];
+  return { slips, customers, rentals, waitlist };
+}
+
+function uid() { return (crypto.randomUUID && crypto.randomUUID()) || Math.random().toString(36).slice(2) + Date.now().toString(36); }
+
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) { const s = seed(); save(s); return s; }
+    const s = JSON.parse(raw);
+    for (const k of ["slips","customers","rentals","waitlist"]) if (!Array.isArray(s[k])) s[k] = [];
+    return s;
+  } catch { const s = seed(); save(s); return s; }
+}
+function save(s) { localStorage.setItem(KEY, JSON.stringify(s)); }
+
+let state = load();
+
+/* -------------------------------- helpers -------------------------------- */
+
+const today = () => {
+  const d = new Date();
+  const pad = n => String(n).padStart(2,"0");
+  return d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate());
+};
+const daysBetween = (a,b) => Math.round((new Date(b) - new Date(a)) / 86400000);
+const fmtMoney = n => "$" + (Number(n)||0).toLocaleString(undefined, {maximumFractionDigits:0});
+const byId = (arr,id) => arr.find(x => x.id === id);
+
+function activeRentalForSlip(slipId) {
+  const t = today();
+  return state.rentals.find(r => r.slipId === slipId && r.status === "active" && r.end >= t);
+}
+function occupiedSlipIds() {
+  const t = today();
+  return new Set(state.rentals.filter(r => r.status === "active" && r.end >= t).map(r => r.slipId));
+}
+
+/* ------------------------------- rendering ------------------------------- */
+
+function renderDashboard() {
+  const occ = occupiedSlipIds();
+  const total = state.slips.length;
+  const occupied = state.slips.filter(s => occ.has(s.id)).length;
+  const pct = total ? Math.round(occupied*100/total) : 0;
+  document.getElementById("kpi-occupancy").textContent = pct + "%";
+  document.getElementById("kpi-occupancy-sub").textContent = occupied + " of " + total + " slips";
+
+  const t = today();
+  const activeRentals = state.rentals.filter(r => r.status === "active" && r.end >= t);
+  const mrr = activeRentals.reduce((a,r) => a + Number(r.rate||0), 0);
+  document.getElementById("kpi-mrr").textContent = fmtMoney(mrr);
+
+  const availableBySize = {};
+  SIZES.forEach(s => availableBySize[s] = 0);
+  state.slips.forEach(s => { if (!occ.has(s.id)) availableBySize[s.size] = (availableBySize[s.size]||0)+1; });
+  const available = state.slips.length - occupied;
+  document.getElementById("kpi-available").textContent = available;
+  document.getElementById("kpi-available-sub").textContent =
+    SIZES.map(s => s + ":" + (availableBySize[s]||0)).join(" · ");
+
+  const expiring = activeRentals.filter(r => daysBetween(t, r.end) <= 30).sort((a,b) => a.end.localeCompare(b.end));
+  document.getElementById("kpi-expiring").textContent = expiring.length;
+
+  const eEl = document.getElementById("expiring-list");
+  if (!expiring.length) {
+    eEl.innerHTML = '<div class="text-slate-500 text-sm">Nothing expiring in the next 30 days. Nice.</div>';
+  } else {
+    eEl.innerHTML = expiring.map(r => {
+      const slip = byId(state.slips, r.slipId);
+      const cust = byId(state.customers, r.customerId);
+      const d = daysBetween(t, r.end);
+      return `<div class="flex justify-between items-center border-b last:border-0 py-1.5">
+        <div>
+          <div class="font-medium">${slip ? esc(slip.number) : "?"} — ${cust ? esc(cust.name) : "?"}</div>
+          <div class="text-xs text-slate-500">ends ${esc(r.end)} · ${fmtMoney(r.rate)}/mo</div>
+        </div>
+        <span class="chip ${d<=7?'bg-rose-100 text-rose-700':'bg-amber-100 text-amber-700'}">${d} days</span>
+      </div>`;
+    }).join("");
+  }
+
+  const mixEl = document.getElementById("mix-list");
+  mixEl.innerHTML = SIZES.map(sz => {
+    const sizeTotal = state.slips.filter(s => s.size === sz).length;
+    const occCount = state.slips.filter(s => s.size === sz && occ.has(s.id)).length;
+    const avail = sizeTotal - occCount;
+    const pct = sizeTotal ? Math.round(occCount*100/sizeTotal) : 0;
+    return `<div>
+      <div class="flex justify-between text-xs text-slate-600"><span>Size ${sz}</span><span>${occCount}/${sizeTotal} · ${avail} open</span></div>
+      <div class="w-full bg-slate-100 rounded h-2 overflow-hidden"><div class="bg-sky-600 h-2" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join("");
+}
+
+function renderSlips() {
+  const occ = occupiedSlipIds();
+  const body = document.getElementById("slips-body");
+  if (!state.slips.length) { body.innerHTML = emptyRow(8, "No slips yet. Click “Add slip”."); return; }
+  body.innerHTML = state.slips.slice().sort((a,b) => a.number.localeCompare(b.number)).map(s => {
+    const r = activeRentalForSlip(s.id);
+    const cust = r ? byId(state.customers, r.customerId) : null;
+    return `<tr class="border-t">
+      <td class="p-3 font-medium">${esc(s.number)}</td>
+      <td class="p-3">${s.size}</td>
+      <td class="p-3">${s.covered ? "Covered" : "Open"}</td>
+      <td class="p-3 text-xs">${s.power?'<span class="chip bg-amber-100 text-amber-800 mr-1">Power</span>':''}${s.water?'<span class="chip bg-sky-100 text-sky-800">Water</span>':''}</td>
+      <td class="p-3 text-right">${fmtMoney(s.rate)}</td>
+      <td class="p-3">${occ.has(s.id) ? '<span class="chip bg-emerald-100 text-emerald-700">Occupied</span>' : '<span class="chip bg-slate-100 text-slate-600">Available</span>'}</td>
+      <td class="p-3">${cust ? esc(cust.name) : '<span class="text-slate-400">—</span>'}</td>
+      <td class="p-3 text-right whitespace-nowrap">
+        <button class="text-sky-700 hover:underline text-xs" data-edit-slip="${s.id}">Edit</button>
+        <button class="text-rose-600 hover:underline text-xs ml-2" data-del-slip="${s.id}">Delete</button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function renderCustomers() {
+  const body = document.getElementById("customers-body");
+  if (!state.customers.length) { body.innerHTML = emptyRow(6, "No customers yet."); return; }
+  body.innerHTML = state.customers.slice().sort((a,b) => a.name.localeCompare(b.name)).map(c => `
+    <tr class="border-t">
+      <td class="p-3 font-medium">${esc(c.name)}</td>
+      <td class="p-3">${esc(c.phone||"")}</td>
+      <td class="p-3">${esc(c.email||"")}</td>
+      <td class="p-3">${esc(c.boat||"")}</td>
+      <td class="p-3">${c.length ? c.length + "'" : ""}</td>
+      <td class="p-3 text-right whitespace-nowrap">
+        <button class="text-sky-700 hover:underline text-xs" data-edit-cust="${c.id}">Edit</button>
+        <button class="text-rose-600 hover:underline text-xs ml-2" data-del-cust="${c.id}">Delete</button>
+      </td>
+    </tr>`).join("");
+}
+
+function renderRentals() {
+  const body = document.getElementById("rentals-body");
+  if (!state.rentals.length) { body.innerHTML = emptyRow(8, "No rentals yet."); return; }
+  const t = today();
+  body.innerHTML = state.rentals.slice().sort((a,b) => (a.end||"").localeCompare(b.end||"")).map(r => {
+    const slip = byId(state.slips, r.slipId);
+    const cust = byId(state.customers, r.customerId);
+    const live = r.status === "active" && r.end >= t;
+    return `<tr class="border-t">
+      <td class="p-3 font-medium">${slip ? esc(slip.number) : '<span class="text-rose-600">missing</span>'}</td>
+      <td class="p-3">${cust ? esc(cust.name) : '<span class="text-rose-600">missing</span>'}</td>
+      <td class="p-3">${r.start||""}</td>
+      <td class="p-3">${r.end||""}</td>
+      <td class="p-3 text-right">${fmtMoney(r.rate)}</td>
+      <td class="p-3">${r.paidThru||""}</td>
+      <td class="p-3">${live ? '<span class="chip bg-emerald-100 text-emerald-700">Active</span>' : '<span class="chip bg-slate-200 text-slate-600">Ended</span>'}</td>
+      <td class="p-3 text-right whitespace-nowrap">
+        <button class="text-sky-700 hover:underline text-xs" data-edit-rent="${r.id}">Edit</button>
+        ${live ? `<button class="text-amber-700 hover:underline text-xs ml-2" data-end-rent="${r.id}">End</button>` : ""}
+        <button class="text-rose-600 hover:underline text-xs ml-2" data-del-rent="${r.id}">Delete</button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function renderWaitlist() {
+  const body = document.getElementById("wait-body");
+  if (!state.waitlist.length) { body.innerHTML = emptyRow(6, "Waitlist is empty."); return; }
+  body.innerHTML = state.waitlist.slice().sort((a,b) => (a.added||"").localeCompare(b.added||"")).map(w => `
+    <tr class="border-t">
+      <td class="p-3 font-medium">${esc(w.name)}</td>
+      <td class="p-3">${esc(w.phone||"")}</td>
+      <td class="p-3">${esc(w.wantsSize||"")}</td>
+      <td class="p-3">${esc(w.added||"")}</td>
+      <td class="p-3 text-slate-600">${esc(w.notes||"")}</td>
+      <td class="p-3 text-right whitespace-nowrap">
+        <button class="text-sky-700 hover:underline text-xs" data-edit-wait="${w.id}">Edit</button>
+        <button class="text-rose-600 hover:underline text-xs ml-2" data-del-wait="${w.id}">Delete</button>
+      </td>
+    </tr>`).join("");
+}
+
+function emptyRow(cols, text) {
+  return `<tr><td colspan="${cols}" class="p-6 text-center text-slate-500">${esc(text)}</td></tr>`;
+}
+function esc(v) { return String(v==null?"":v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function renderAll() { renderDashboard(); renderSlips(); renderCustomers(); renderRentals(); renderWaitlist(); }
+
+/* ---------------------------------- tabs --------------------------------- */
+
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const tab = btn.dataset.tab;
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.add("hidden"));
+    document.getElementById("tab-" + tab).classList.remove("hidden");
+  });
+});
+
+/* --------------------------------- modal --------------------------------- */
+
+const modal = document.getElementById("modal");
+const modalForm = document.getElementById("modal-form");
+const modalTitle = document.getElementById("modal-title");
+const modalFields = document.getElementById("modal-fields");
+document.getElementById("modal-cancel").addEventListener("click", () => modal.close());
+let modalSubmit = null;
+modalForm.addEventListener("submit", e => {
+  e.preventDefault();
+  const data = {};
+  modalFields.querySelectorAll("[name]").forEach(el => {
+    if (el.type === "checkbox") data[el.name] = el.checked;
+    else if (el.type === "number") data[el.name] = el.value === "" ? null : Number(el.value);
+    else data[el.name] = el.value;
+  });
+  if (modalSubmit) modalSubmit(data);
+  modal.close();
+});
+
+function openForm(title, fields, values, onSubmit) {
+  modalTitle.textContent = title;
+  modalFields.innerHTML = fields.map(f => {
+    const v = values && values[f.name] != null ? values[f.name] : (f.default != null ? f.default : "");
+    const label = `<label class="block text-xs font-medium text-slate-600 mb-1">${esc(f.label)}</label>`;
+    if (f.type === "select") {
+      return `<div>${label}<select name="${f.name}" class="w-full border rounded px-2 py-1.5 text-sm">${
+        f.options.map(o => {
+          const val = typeof o === "object" ? o.value : o;
+          const txt = typeof o === "object" ? o.label : o;
+          return `<option value="${esc(val)}" ${String(v)===String(val)?"selected":""}>${esc(txt)}</option>`;
+        }).join("")
+      }</select></div>`;
+    }
+    if (f.type === "checkbox") {
+      return `<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="${f.name}" ${v?"checked":""}/> ${esc(f.label)}</label>`;
+    }
+    if (f.type === "textarea") {
+      return `<div>${label}<textarea name="${f.name}" rows="2" class="w-full border rounded px-2 py-1.5 text-sm">${esc(v)}</textarea></div>`;
+    }
+    const type = f.type || "text";
+    return `<div>${label}<input type="${type}" name="${f.name}" value="${esc(v)}" ${f.required?"required":""} class="w-full border rounded px-2 py-1.5 text-sm"/></div>`;
+  }).join("");
+  modalSubmit = onSubmit;
+  modal.showModal();
+}
+
+/* --------------------------------- CRUD ---------------------------------- */
+
+// Slips
+document.getElementById("btn-add-slip").addEventListener("click", () => slipForm());
+function slipForm(existing) {
+  openForm(existing ? "Edit slip" : "Add slip", [
+    {name:"number", label:"Slip #", required:true},
+    {name:"size",   label:"Size",   type:"select", options:SIZES},
+    {name:"rate",   label:"Rate ($/month)", type:"number"},
+    {name:"covered",label:"Covered", type:"checkbox"},
+    {name:"power",  label:"Power",   type:"checkbox"},
+    {name:"water",  label:"Water",   type:"checkbox"},
+  ], existing, data => {
+    if (existing) Object.assign(existing, data);
+    else state.slips.push({id:uid(), ...data});
+    save(state); renderAll();
+  });
+}
+document.getElementById("slips-body").addEventListener("click", e => {
+  const ed = e.target.closest("[data-edit-slip]");
+  const de = e.target.closest("[data-del-slip]");
+  if (ed) slipForm(byId(state.slips, ed.dataset.editSlip));
+  if (de) {
+    const id = de.dataset.delSlip;
+    if (state.rentals.some(r => r.slipId === id)) { alert("This slip has rentals. Delete those first."); return; }
+    if (confirm("Delete this slip?")) { state.slips = state.slips.filter(s => s.id !== id); save(state); renderAll(); }
+  }
+});
+
+// Customers
+document.getElementById("btn-add-customer").addEventListener("click", () => custForm());
+function custForm(existing) {
+  openForm(existing ? "Edit customer" : "Add customer", [
+    {name:"name",  label:"Name",  required:true},
+    {name:"phone", label:"Phone"},
+    {name:"email", label:"Email", type:"email"},
+    {name:"boat",  label:"Boat name"},
+    {name:"length",label:"Length (ft)", type:"number"},
+    {name:"notes", label:"Notes", type:"textarea"},
+  ], existing, data => {
+    if (existing) Object.assign(existing, data);
+    else state.customers.push({id:uid(), ...data});
+    save(state); renderAll();
+  });
+}
+document.getElementById("customers-body").addEventListener("click", e => {
+  const ed = e.target.closest("[data-edit-cust]");
+  const de = e.target.closest("[data-del-cust]");
+  if (ed) custForm(byId(state.customers, ed.dataset.editCust));
+  if (de) {
+    const id = de.dataset.delCust;
+    if (state.rentals.some(r => r.customerId === id)) { alert("This customer has rentals. Delete those first."); return; }
+    if (confirm("Delete this customer?")) { state.customers = state.customers.filter(c => c.id !== id); save(state); renderAll(); }
+  }
+});
+
+// Rentals
+document.getElementById("btn-add-rental").addEventListener("click", () => rentalForm());
+function rentalForm(existing) {
+  if (!state.slips.length || !state.customers.length) {
+    alert("Add at least one slip and one customer first."); return;
+  }
+  const slipOpts = state.slips.slice().sort((a,b) => a.number.localeCompare(b.number))
+    .map(s => ({value:s.id, label:`${s.number} (${s.size}${s.covered?" covered":""})`}));
+  const custOpts = state.customers.slice().sort((a,b) => a.name.localeCompare(b.name))
+    .map(c => ({value:c.id, label:c.name}));
+  openForm(existing ? "Edit rental" : "New rental", [
+    {name:"slipId",     label:"Slip",      type:"select", options:slipOpts},
+    {name:"customerId", label:"Customer",  type:"select", options:custOpts},
+    {name:"start",      label:"Start date",type:"date",   default:today()},
+    {name:"end",        label:"End date",  type:"date"},
+    {name:"rate",       label:"Rate ($/month)", type:"number"},
+    {name:"paidThru",   label:"Paid through", type:"date"},
+    {name:"status",     label:"Status",    type:"select", options:["active","ended"]},
+  ], existing, data => {
+    if (data.status === "active") {
+      const conflict = findRentalConflict(data, existing && existing.id);
+      if (conflict) {
+        const slip = byId(state.slips, data.slipId);
+        const cust = byId(state.customers, conflict.customerId);
+        alert(`Cannot save: slip ${slip ? slip.number : ""} already has an active rental`
+          + (cust ? ` for ${cust.name}` : "")
+          + ` from ${conflict.start || "?"} to ${conflict.end || "?"}.\n\n`
+          + `End that rental first, or change this one's status to "ended".`);
+        return;
+      }
+    }
+    if (existing) Object.assign(existing, data);
+    else state.rentals.push({id:uid(), ...data});
+    save(state); renderAll();
+  });
+}
+function findRentalConflict(data, excludeId) {
+  const FAR_PAST = "0000-01-01", FAR_FUTURE = "9999-12-31";
+  const aStart = data.start || FAR_PAST;
+  const aEnd   = data.end   || FAR_FUTURE;
+  return state.rentals.find(r =>
+    r.id !== excludeId
+    && r.slipId === data.slipId
+    && r.status === "active"
+    && (r.start || FAR_PAST) <= aEnd
+    && aStart <= (r.end || FAR_FUTURE)
+  );
+}
+document.getElementById("rentals-body").addEventListener("click", e => {
+  const ed = e.target.closest("[data-edit-rent]");
+  const en = e.target.closest("[data-end-rent]");
+  const de = e.target.closest("[data-del-rent]");
+  if (ed) rentalForm(byId(state.rentals, ed.dataset.editRent));
+  if (en) {
+    const r = byId(state.rentals, en.dataset.endRent);
+    if (r) { r.status = "ended"; r.end = today(); save(state); renderAll(); }
+  }
+  if (de) {
+    const id = de.dataset.delRent;
+    if (confirm("Delete this rental?")) { state.rentals = state.rentals.filter(r => r.id !== id); save(state); renderAll(); }
+  }
+});
+
+// Waitlist
+document.getElementById("btn-add-wait").addEventListener("click", () => waitForm());
+function waitForm(existing) {
+  openForm(existing ? "Edit prospect" : "Add prospect", [
+    {name:"name",      label:"Name",  required:true},
+    {name:"phone",     label:"Phone"},
+    {name:"wantsSize", label:"Wants size", type:"select", options:SIZES},
+    {name:"added",     label:"Added", type:"date", default:today()},
+    {name:"notes",     label:"Notes", type:"textarea"},
+  ], existing, data => {
+    if (existing) Object.assign(existing, data);
+    else state.waitlist.push({id:uid(), ...data});
+    save(state); renderAll();
+  });
+}
+document.getElementById("wait-body").addEventListener("click", e => {
+  const ed = e.target.closest("[data-edit-wait]");
+  const de = e.target.closest("[data-del-wait]");
+  if (ed) waitForm(byId(state.waitlist, ed.dataset.editWait));
+  if (de) {
+    const id = de.dataset.delWait;
+    if (confirm("Remove from waitlist?")) { state.waitlist = state.waitlist.filter(w => w.id !== id); save(state); renderAll(); }
+  }
+});
+
+/* --------------------------- export / import / reset --------------------- */
+
+document.getElementById("btn-export").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "dockmaster-backup-" + today() + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+});
+document.getElementById("btn-import").addEventListener("click", () => document.getElementById("file-import").click());
+document.getElementById("file-import").addEventListener("change", e => {
+  const file = e.target.files[0]; if (!file) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const parsed = JSON.parse(rd.result);
+      if (!parsed || typeof parsed !== "object") throw new Error("bad file");
+      state = {
+        slips: Array.isArray(parsed.slips) ? parsed.slips : [],
+        customers: Array.isArray(parsed.customers) ? parsed.customers : [],
+        rentals: Array.isArray(parsed.rentals) ? parsed.rentals : [],
+        waitlist: Array.isArray(parsed.waitlist) ? parsed.waitlist : [],
+      };
+      save(state); renderAll();
+      alert("Imported.");
+    } catch (err) { alert("Import failed: " + err.message); }
+  };
+  rd.readAsText(file);
+  e.target.value = "";
+});
+document.getElementById("btn-reset").addEventListener("click", () => {
+  if (confirm("Replace all data with demo seed? This cannot be undone.")) {
+    state = seed(); save(state); renderAll();
+  }
+});
+
+renderAll();
+</script>
+</body>
+</html>
