@@ -8,7 +8,7 @@
 # the new value in $Token.
 # ============================================================
 
-$Token          = "8870411603:AAFvmf7DLVqMliyjceM5_F7jp0XCQNmuc3g"
+$Token          = "8776583139:AAFcBWAsgsIQ4zMIMZ0A82ShImhDpSifLI8"
 $TelegramUserId = "7615833146"
 
 # ── 1. Set env vars (current + permanent user-level) ──
