@@ -1,5 +1,5 @@
 # ============================================================
-# CIPHER — SWITCH TO FAST GPU MODEL
+# CIPHER - SWITCH TO FAST GPU MODEL
 # Switches Hermes from gpt-oss:20b-64k (49%/51% CPU/GPU, 32s)
 # to qwen2.5-coder:7b (100% GPU, ~1s per response)
 # Creates cipher-fast:7b Ollama wrapper with Cipher identity
@@ -15,19 +15,19 @@ Write-Host "=== Cipher Fast Model Switch ===" -ForegroundColor Cyan
 Write-Host "Switching from gpt-oss:20b-64k (32s/response)" -ForegroundColor Yellow
 Write-Host "          to $WrapperName (~1s/response, 100% GPU)" -ForegroundColor Green
 
-# ── 1. Verify qwen2.5-coder:7b exists ─────────────────────
+# --- 1. Verify qwen2.5-coder:7b exists ---
 Write-Host ""
 Write-Host "=== Checking model availability ===" -ForegroundColor Cyan
 
 $models = ollama list 2>$null
 if ($models -notmatch "qwen2.5-coder:7b") {
-    Write-Host "qwen2.5-coder:7b not found — pulling now (~4.7 GB)..." -ForegroundColor Yellow
+    Write-Host "qwen2.5-coder:7b not found - pulling now (~4.7 GB)..." -ForegroundColor Yellow
     ollama pull qwen2.5-coder:7b
 } else {
     Write-Host "qwen2.5-coder:7b found." -ForegroundColor Green
 }
 
-# ── 2. Create Cipher wrapper Modelfile ───────────────────
+# --- 2. Create Cipher wrapper Modelfile ---
 Write-Host ""
 Write-Host "=== Creating cipher-fast:7b wrapper ===" -ForegroundColor Cyan
 
@@ -41,7 +41,7 @@ SYSTEM You are Cipher. Your name is Cipher. You are a local Unreal Engine coding
 '@
 
 $modelfilePath = "$env:TEMP\cipher_fast_modelfile.txt"
-Set-Content -Path $modelfilePath -Value $modelfile -Encoding UTF8
+Set-Content -Path $modelfilePath -Value $modelfile -Encoding ASCII
 
 ollama create $WrapperName -f $modelfilePath
 if ($LASTEXITCODE -eq 0) {
@@ -51,7 +51,7 @@ if ($LASTEXITCODE -eq 0) {
     exit 1
 }
 
-# ── 3. Time a test response ───────────────────────────────
+# --- 3. Time a test response ---
 Write-Host ""
 Write-Host "=== Speed test ===" -ForegroundColor Cyan
 Write-Host "Testing response speed on cipher-fast:7b..." -ForegroundColor Yellow
@@ -64,9 +64,13 @@ $elapsed = (Measure-Command {
     } | ConvertTo-Json) -ContentType "application/json"
 }).TotalSeconds
 
-Write-Host "Response time: $([math]::Round($elapsed, 1))s" -ForegroundColor $(if ($elapsed -lt 5) { "Green" } elseif ($elapsed -lt 15) { "Yellow" } else { "Red" })
+$elapsedRounded = [math]::Round($elapsed, 1)
+$color = "Red"
+if ($elapsed -lt 5) { $color = "Green" }
+elseif ($elapsed -lt 15) { $color = "Yellow" }
+Write-Host "Response time: ${elapsedRounded}s" -ForegroundColor $color
 
-# ── 4. Patch Hermes config to use new model ───────────────
+# --- 4. Patch Hermes config to use new model ---
 Write-Host ""
 Write-Host "=== Patching Hermes config ===" -ForegroundColor Cyan
 
@@ -76,7 +80,7 @@ try { hermes config set model.name    $WrapperName 2>$null } catch {}
 
 Write-Host "Hermes config patched to use $WrapperName." -ForegroundColor Green
 
-# ── 5. Kill current Hermes + Ollama gpt-oss load ─────────
+# --- 5. Kill current Hermes + Ollama gpt-oss load ---
 Write-Host ""
 Write-Host "=== Stopping slow model + Hermes processes ===" -ForegroundColor Cyan
 
@@ -87,11 +91,11 @@ Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
     }
 
-# Unload gpt-oss from VRAM by setting keepalive=0
+# Unload gpt-oss from VRAM by setting keep_alive=0
 try {
     Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/generate" -Method Post -Body (@{
-        model     = "gpt-oss:20b-64k"
-        prompt    = ""
+        model      = "gpt-oss:20b-64k"
+        prompt     = ""
         keep_alive = 0
     } | ConvertTo-Json) -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
 } catch {}
@@ -99,25 +103,26 @@ try {
 Write-Host "gpt-oss:20b-64k unloaded from VRAM." -ForegroundColor Green
 Start-Sleep -Seconds 2
 
-# ── 6. Send Telegram notification ────────────────────────
+# --- 6. Send Telegram notification ---
 Write-Host ""
 Write-Host "=== Sending Telegram confirmation ===" -ForegroundColor Cyan
 
 try {
+    $msg = "Cipher model switched. From: gpt-oss:20b-64k (32s/response). To: cipher-fast:7b (~${elapsedRounded}s/response). Hermes restarting with fast model."
     Invoke-RestMethod -Uri "https://api.telegram.org/bot$Token/sendMessage" -Method Post -Body @{
         chat_id = $TelegramUserId
-        text    = "Cipher model switched ⚡`nFrom: gpt-oss:20b-64k (32s/response)`nTo: cipher-fast:7b (~${elapsed}s/response)`n`nHermes will restart with fast model. Telegram still hot."
+        text    = $msg
     } -TimeoutSec 15 | Out-Null
     Write-Host "Telegram notification sent." -ForegroundColor Green
 } catch {
     Write-Host "Telegram send failed: $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
-# ── 7. Launch fresh Hermes with fast model ────────────────
+# --- 7. Launch fresh Hermes with fast model ---
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host " MODEL SWITCHED: cipher-fast:7b active" -ForegroundColor Green
-Write-Host " Response time: ~$([math]::Round($elapsed, 1))s (was 32.7s)" -ForegroundColor Green
+Write-Host " Response time: ~${elapsedRounded}s (was 32.7s)" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Launching Hermes with fast model..." -ForegroundColor Cyan
