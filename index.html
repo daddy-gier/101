@@ -89,9 +89,11 @@
 
   <!-- SLIPS -->
   <section id="tab-slips" class="tab-panel hidden">
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center justify-between mb-4 gap-3">
       <h2 class="text-lg font-semibold">Slips</h2>
-      <button id="btn-add-slip" class="bg-sky-700 hover:bg-sky-800 text-white text-sm px-3 py-1.5 rounded">+ Add slip</button>
+      <div class="flex-1"></div>
+      <input id="search-slips" type="search" placeholder="Search slips…" class="border rounded px-3 py-1.5 text-sm w-56" />
+      <button id="btn-add-slip" class="bg-sky-700 hover:bg-sky-800 text-white text-sm px-3 py-1.5 rounded whitespace-nowrap">+ Add slip</button>
     </div>
     <div class="bg-white rounded-lg shadow overflow-x-auto">
       <table class="w-full text-sm">
@@ -114,9 +116,11 @@
 
   <!-- CUSTOMERS -->
   <section id="tab-customers" class="tab-panel hidden">
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center justify-between mb-4 gap-3">
       <h2 class="text-lg font-semibold">Customers</h2>
-      <button id="btn-add-customer" class="bg-sky-700 hover:bg-sky-800 text-white text-sm px-3 py-1.5 rounded">+ Add customer</button>
+      <div class="flex-1"></div>
+      <input id="search-customers" type="search" placeholder="Search customers…" class="border rounded px-3 py-1.5 text-sm w-56" />
+      <button id="btn-add-customer" class="bg-sky-700 hover:bg-sky-800 text-white text-sm px-3 py-1.5 rounded whitespace-nowrap">+ Add customer</button>
     </div>
     <div class="bg-white rounded-lg shadow overflow-x-auto">
       <table class="w-full text-sm">
@@ -137,9 +141,11 @@
 
   <!-- RENTALS -->
   <section id="tab-rentals" class="tab-panel hidden">
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center justify-between mb-4 gap-3">
       <h2 class="text-lg font-semibold">Rentals</h2>
-      <button id="btn-add-rental" class="bg-sky-700 hover:bg-sky-800 text-white text-sm px-3 py-1.5 rounded">+ New rental</button>
+      <div class="flex-1"></div>
+      <input id="search-rentals" type="search" placeholder="Search rentals…" class="border rounded px-3 py-1.5 text-sm w-56" />
+      <button id="btn-add-rental" class="bg-sky-700 hover:bg-sky-800 text-white text-sm px-3 py-1.5 rounded whitespace-nowrap">+ New rental</button>
     </div>
     <div class="bg-white rounded-lg shadow overflow-x-auto">
       <table class="w-full text-sm">
@@ -162,9 +168,11 @@
 
   <!-- WAITLIST -->
   <section id="tab-waitlist" class="tab-panel hidden">
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center justify-between mb-4 gap-3">
       <h2 class="text-lg font-semibold">Waitlist</h2>
-      <button id="btn-add-wait" class="bg-sky-700 hover:bg-sky-800 text-white text-sm px-3 py-1.5 rounded">+ Add prospect</button>
+      <div class="flex-1"></div>
+      <input id="search-wait" type="search" placeholder="Search waitlist…" class="border rounded px-3 py-1.5 text-sm w-56" />
+      <button id="btn-add-wait" class="bg-sky-700 hover:bg-sky-800 text-white text-sm px-3 py-1.5 rounded whitespace-nowrap">+ Add prospect</button>
     </div>
     <div class="bg-white rounded-lg shadow overflow-x-auto">
       <table class="w-full text-sm">
@@ -279,6 +287,18 @@ function occupiedSlipIds() {
   const t = today();
   return new Set(state.rentals.filter(r => r.status === "active" && r.end >= t).map(r => r.slipId));
 }
+function addDays(iso, n) {
+  const d = iso ? new Date(iso + "T00:00:00") : new Date();
+  d.setDate(d.getDate() + n);
+  const pad = x => String(x).padStart(2,"0");
+  return d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate());
+}
+function matches(query, fields) {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  return fields.some(f => String(f || "").toLowerCase().includes(q));
+}
+const searchState = { slips: "", customers: "", rentals: "", wait: "" };
 
 /* ------------------------------- rendering ------------------------------- */
 
@@ -314,7 +334,7 @@ function renderDashboard() {
       const slip = byId(state.slips, r.slipId);
       const cust = byId(state.customers, r.customerId);
       const d = daysBetween(t, r.end);
-      return `<div class="flex justify-between items-center border-b last:border-0 py-1.5">
+      return `<div data-jump-rental="${r.id}" class="flex justify-between items-center border-b last:border-0 py-1.5 cursor-pointer hover:bg-slate-50 rounded px-2 -mx-2">
         <div>
           <div class="font-medium">${slip ? esc(slip.number) : "?"} — ${cust ? esc(cust.name) : "?"}</div>
           <div class="text-xs text-slate-500">ends ${esc(r.end)} · ${fmtMoney(r.rate)}/mo</div>
@@ -341,7 +361,15 @@ function renderSlips() {
   const occ = occupiedSlipIds();
   const body = document.getElementById("slips-body");
   if (!state.slips.length) { body.innerHTML = emptyRow(8, "No slips yet. Click “Add slip”."); return; }
-  body.innerHTML = state.slips.slice().sort((a,b) => a.number.localeCompare(b.number)).map(s => {
+  const q = searchState.slips;
+  const rows = state.slips.slice().sort((a,b) => a.number.localeCompare(b.number)).filter(s => {
+    if (!q) return true;
+    const r = activeRentalForSlip(s.id);
+    const cust = r ? byId(state.customers, r.customerId) : null;
+    return matches(q, [s.number, s.size, s.covered ? "covered" : "open", cust && cust.name, cust && cust.boat]);
+  });
+  if (!rows.length) { body.innerHTML = emptyRow(8, "No slips match your search."); return; }
+  body.innerHTML = rows.map(s => {
     const r = activeRentalForSlip(s.id);
     const cust = r ? byId(state.customers, r.customerId) : null;
     return `<tr class="border-t">
@@ -363,7 +391,11 @@ function renderSlips() {
 function renderCustomers() {
   const body = document.getElementById("customers-body");
   if (!state.customers.length) { body.innerHTML = emptyRow(6, "No customers yet."); return; }
-  body.innerHTML = state.customers.slice().sort((a,b) => a.name.localeCompare(b.name)).map(c => `
+  const q = searchState.customers;
+  const rows = state.customers.slice().sort((a,b) => a.name.localeCompare(b.name))
+    .filter(c => matches(q, [c.name, c.phone, c.email, c.boat, c.notes]));
+  if (!rows.length) { body.innerHTML = emptyRow(6, "No customers match your search."); return; }
+  body.innerHTML = rows.map(c => `
     <tr class="border-t">
       <td class="p-3 font-medium">${esc(c.name)}</td>
       <td class="p-3">${esc(c.phone||"")}</td>
@@ -381,20 +413,33 @@ function renderRentals() {
   const body = document.getElementById("rentals-body");
   if (!state.rentals.length) { body.innerHTML = emptyRow(8, "No rentals yet."); return; }
   const t = today();
-  body.innerHTML = state.rentals.slice().sort((a,b) => (a.end||"").localeCompare(b.end||"")).map(r => {
+  const q = searchState.rentals;
+  const rows = state.rentals.slice().sort((a,b) => (a.end||"").localeCompare(b.end||"")).filter(r => {
+    if (!q) return true;
+    const slip = byId(state.slips, r.slipId);
+    const cust = byId(state.customers, r.customerId);
+    return matches(q, [slip && slip.number, cust && cust.name, cust && cust.boat, r.status]);
+  });
+  if (!rows.length) { body.innerHTML = emptyRow(8, "No rentals match your search."); return; }
+  body.innerHTML = rows.map(r => {
     const slip = byId(state.slips, r.slipId);
     const cust = byId(state.customers, r.customerId);
     const live = r.status === "active" && r.end >= t;
-    return `<tr class="border-t">
+    const pastDue = live && r.paidThru && r.paidThru < t;
+    const paidBadge = pastDue
+      ? '<span class="chip bg-rose-100 text-rose-700 ml-1">Past due</span>'
+      : "";
+    return `<tr id="rental-row-${r.id}" class="border-t">
       <td class="p-3 font-medium">${slip ? esc(slip.number) : '<span class="text-rose-600">missing</span>'}</td>
       <td class="p-3">${cust ? esc(cust.name) : '<span class="text-rose-600">missing</span>'}</td>
-      <td class="p-3">${r.start||""}</td>
-      <td class="p-3">${r.end||""}</td>
+      <td class="p-3">${esc(r.start||"")}</td>
+      <td class="p-3">${esc(r.end||"")}</td>
       <td class="p-3 text-right">${fmtMoney(r.rate)}</td>
-      <td class="p-3">${r.paidThru||""}</td>
+      <td class="p-3">${esc(r.paidThru||"")}${paidBadge}</td>
       <td class="p-3">${live ? '<span class="chip bg-emerald-100 text-emerald-700">Active</span>' : '<span class="chip bg-slate-200 text-slate-600">Ended</span>'}</td>
       <td class="p-3 text-right whitespace-nowrap">
-        <button class="text-sky-700 hover:underline text-xs" data-edit-rent="${r.id}">Edit</button>
+        ${live ? `<button class="text-emerald-700 hover:underline text-xs" data-paid-rent="${r.id}" title="Extend paid-through by 30 days">+30d paid</button>` : ""}
+        <button class="text-sky-700 hover:underline text-xs ml-2" data-edit-rent="${r.id}">Edit</button>
         ${live ? `<button class="text-amber-700 hover:underline text-xs ml-2" data-end-rent="${r.id}">End</button>` : ""}
         <button class="text-rose-600 hover:underline text-xs ml-2" data-del-rent="${r.id}">Delete</button>
       </td>
@@ -405,7 +450,11 @@ function renderRentals() {
 function renderWaitlist() {
   const body = document.getElementById("wait-body");
   if (!state.waitlist.length) { body.innerHTML = emptyRow(6, "Waitlist is empty."); return; }
-  body.innerHTML = state.waitlist.slice().sort((a,b) => (a.added||"").localeCompare(b.added||"")).map(w => `
+  const q = searchState.wait;
+  const rows = state.waitlist.slice().sort((a,b) => (a.added||"").localeCompare(b.added||""))
+    .filter(w => matches(q, [w.name, w.phone, w.wantsSize, w.notes]));
+  if (!rows.length) { body.innerHTML = emptyRow(6, "No prospects match your search."); return; }
+  body.innerHTML = rows.map(w => `
     <tr class="border-t">
       <td class="p-3 font-medium">${esc(w.name)}</td>
       <td class="p-3">${esc(w.phone||"")}</td>
@@ -593,6 +642,7 @@ document.getElementById("rentals-body").addEventListener("click", e => {
   const ed = e.target.closest("[data-edit-rent]");
   const en = e.target.closest("[data-end-rent]");
   const de = e.target.closest("[data-del-rent]");
+  const pd = e.target.closest("[data-paid-rent]");
   if (ed) rentalForm(byId(state.rentals, ed.dataset.editRent));
   if (en) {
     const r = byId(state.rentals, en.dataset.endRent);
@@ -601,6 +651,14 @@ document.getElementById("rentals-body").addEventListener("click", e => {
   if (de) {
     const id = de.dataset.delRent;
     if (confirm("Delete this rental?")) { state.rentals = state.rentals.filter(r => r.id !== id); save(state); renderAll(); }
+  }
+  if (pd) {
+    const r = byId(state.rentals, pd.dataset.paidRent);
+    if (r) {
+      const base = (r.paidThru && r.paidThru >= today()) ? r.paidThru : today();
+      r.paidThru = addDays(base, 30);
+      save(state); renderAll();
+    }
   }
 });
 
@@ -663,6 +721,36 @@ document.getElementById("file-import").addEventListener("change", e => {
 document.getElementById("btn-reset").addEventListener("click", () => {
   if (confirm("Replace all data with demo seed? This cannot be undone.")) {
     state = seed(); save(state); renderAll();
+  }
+});
+
+/* ------------------------- search & dashboard jumps ---------------------- */
+
+function switchTab(tab) {
+  const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  if (btn) btn.click();
+}
+[
+  ["search-slips",     "slips",     renderSlips],
+  ["search-customers", "customers", renderCustomers],
+  ["search-rentals",   "rentals",   renderRentals],
+  ["search-wait",      "wait",      renderWaitlist],
+].forEach(([id, key, render]) => {
+  document.getElementById(id).addEventListener("input", e => {
+    searchState[key] = e.target.value.trim();
+    render();
+  });
+});
+
+document.getElementById("expiring-list").addEventListener("click", e => {
+  const item = e.target.closest("[data-jump-rental]");
+  if (!item) return;
+  switchTab("rentals");
+  const row = document.getElementById("rental-row-" + item.dataset.jumpRental);
+  if (row) {
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.classList.add("bg-amber-50");
+    setTimeout(() => row.classList.remove("bg-amber-50"), 1500);
   }
 });
 
