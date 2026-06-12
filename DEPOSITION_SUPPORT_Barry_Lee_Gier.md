@@ -78,7 +78,7 @@ You have a recorded phone call with a Mercy representative named **"Vicki"** in 
 
 This recording is **direct evidence of disability discrimination** under the ADA (Americans with Disabilities Act). Your attorney has specifically requested this recording — it was confirmed in your possession on April 15, 2026, and Lampert asked for it again on May 8, 2026.
 
-**ACTION REQUIRED BEFORE TUESDAY:** Locate this audio file on your phone, devices, or cloud backup and bring it or send it to Lampert before your prep meeting on Tuesday.
+**STATUS: SENT June 12, 2026** — Recording 2.m4a emailed to ray@lampertlaw.net with subject "Recording — Vicki Call (disability disclosure)." Confirm he received it at Tuesday's prep meeting.
 
 ---
 
@@ -138,7 +138,7 @@ A: Lost wages, loss of career path, financial hardship, physical pain and medica
 
 ## IMPORTANT ACTION ITEMS BEFORE JUNE 17
 
-1. **FIND THE "VICKI" RECORDING** — Search your phone, voicemail, cloud storage, downloads folder. Send to ray@lampertlaw.net or bring to Tuesday's meeting. This is the most urgent item.
+1. ~~**FIND THE "VICKI" RECORDING**~~ — **DONE June 12, 2026.** Recording 2.m4a sent to ray@lampertlaw.net. Confirm receipt Tuesday.
 2. **ATTEND PREP MEETING TUESDAY, JUNE 16** — Lampert confirmed. You agreed to this.
 3. **BRING YOUR CALM AND YOUR FACTS** — At deposition, listen to every question fully before answering. Answer only what is asked. If you don't know or don't remember, say so — do not guess. Your attorney can object, and you should wait for him before answering if he does.
 4. **You can sit in on Mercy's depositions Friday, June 20** — Lampert offered this. Consider attending so you can hear their version firsthand.
