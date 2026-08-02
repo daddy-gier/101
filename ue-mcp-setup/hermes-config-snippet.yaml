@@ -1,0 +1,6 @@
+# Add this block to your ~/.hermes/config.yaml
+# (merge it into any existing mcp_servers section — do not duplicate the key)
+
+mcp_servers:
+  unreal-engine:
+    url: http://127.0.0.1:8000/mcp
