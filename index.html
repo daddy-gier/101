@@ -150,6 +150,7 @@
             <th class="text-left p-3">Start</th>
             <th class="text-left p-3">End</th>
             <th class="text-right p-3">Rate</th>
+            <th class="text-left p-3">Billing</th>
             <th class="text-left p-3">Paid thru</th>
             <th class="text-left p-3">Status</th>
             <th class="p-3"></th>
@@ -235,9 +236,9 @@ function seed() {
     {id:uid(), name:"Tom Walsh",      phone:"(417) 555-0107", email:"tom@example.com",  boat:"Reel Deal",      length:28, notes:""},
   ];
   const rentals = [
-    {id:uid(), slipId:slips[0].id, customerId:customers[0].id, start:plusDays(-120), end:plusDays(18),  rate:175, paidThru:plusDays(-2),  status:"active"},
-    {id:uid(), slipId:slips[3].id, customerId:customers[1].id, start:plusDays(-45),  end:plusDays(320), rate:315, paidThru:plusDays(12),  status:"active"},
-    {id:uid(), slipId:slips[5].id, customerId:customers[2].id, start:plusDays(-300), end:plusDays(65),  rate:425, paidThru:plusDays(25),  status:"active"},
+    {id:uid(), slipId:slips[0].id, customerId:customers[0].id, start:plusDays(-120), end:plusDays(18),  rate:175, paidThru:plusDays(-2),  status:"active", billingInterval:"monthly",   paymentLink:"https://buy.stripe.com/test_dockmaster_monthly_dale"},
+    {id:uid(), slipId:slips[3].id, customerId:customers[1].id, start:plusDays(-45),  end:plusDays(320), rate:315, paidThru:plusDays(12),  status:"active", billingInterval:"bi-annual", paymentLink:"https://buy.stripe.com/test_dockmaster_biannual_megan"},
+    {id:uid(), slipId:slips[5].id, customerId:customers[2].id, start:plusDays(-300), end:plusDays(65),  rate:425, paidThru:plusDays(25),  status:"active", billingInterval:"annual",    paymentLink:"https://buy.stripe.com/test_dockmaster_annual_tom"},
   ];
   const waitlist = [
     {id:uid(), name:"Jenna Price", phone:"(417) 555-0181", wantsSize:"L",  added:iso(today), notes:"Wants covered"},
@@ -377,26 +378,37 @@ function renderCustomers() {
     </tr>`).join("");
 }
 
+const BILLING_LABELS = {"monthly":"Monthly","bi-annual":"Bi-Annual","annual":"Annual"};
+const BILLING_COLORS = {"monthly":"bg-sky-100 text-sky-800","bi-annual":"bg-violet-100 text-violet-800","annual":"bg-emerald-100 text-emerald-700"};
+
 function renderRentals() {
   const body = document.getElementById("rentals-body");
-  if (!state.rentals.length) { body.innerHTML = emptyRow(8, "No rentals yet."); return; }
+  if (!state.rentals.length) { body.innerHTML = emptyRow(9, "No rentals yet."); return; }
   const t = today();
   body.innerHTML = state.rentals.slice().sort((a,b) => (a.end||"").localeCompare(b.end||"")).map(r => {
     const slip = byId(state.slips, r.slipId);
     const cust = byId(state.customers, r.customerId);
     const live = r.status === "active" && r.end >= t;
+    const bi = r.billingInterval || "monthly";
+    const biLabel = BILLING_LABELS[bi] || bi;
+    const biColor = BILLING_COLORS[bi] || "bg-slate-100 text-slate-600";
+    const payBtn = r.paymentLink
+      ? `<a href="${esc(r.paymentLink)}" target="_blank" rel="noopener" class="text-emerald-700 hover:underline text-xs ml-2 font-semibold">Pay ↗</a>`
+      : "";
     return `<tr class="border-t">
       <td class="p-3 font-medium">${slip ? esc(slip.number) : '<span class="text-rose-600">missing</span>'}</td>
       <td class="p-3">${cust ? esc(cust.name) : '<span class="text-rose-600">missing</span>'}</td>
       <td class="p-3">${r.start||""}</td>
       <td class="p-3">${r.end||""}</td>
       <td class="p-3 text-right">${fmtMoney(r.rate)}</td>
+      <td class="p-3"><span class="chip ${biColor}">${esc(biLabel)}</span></td>
       <td class="p-3">${r.paidThru||""}</td>
       <td class="p-3">${live ? '<span class="chip bg-emerald-100 text-emerald-700">Active</span>' : '<span class="chip bg-slate-200 text-slate-600">Ended</span>'}</td>
       <td class="p-3 text-right whitespace-nowrap">
         <button class="text-sky-700 hover:underline text-xs" data-edit-rent="${r.id}">Edit</button>
         ${live ? `<button class="text-amber-700 hover:underline text-xs ml-2" data-end-rent="${r.id}">End</button>` : ""}
         <button class="text-rose-600 hover:underline text-xs ml-2" data-del-rent="${r.id}">Delete</button>
+        ${payBtn}
       </td>
     </tr>`;
   }).join("");
@@ -552,13 +564,19 @@ function rentalForm(existing) {
   const custOpts = state.customers.slice().sort((a,b) => a.name.localeCompare(b.name))
     .map(c => ({value:c.id, label:c.name}));
   openForm(existing ? "Edit rental" : "New rental", [
-    {name:"slipId",     label:"Slip",      type:"select", options:slipOpts},
-    {name:"customerId", label:"Customer",  type:"select", options:custOpts},
-    {name:"start",      label:"Start date",type:"date",   default:today()},
-    {name:"end",        label:"End date",  type:"date"},
-    {name:"rate",       label:"Rate ($/month)", type:"number"},
-    {name:"paidThru",   label:"Paid through", type:"date"},
-    {name:"status",     label:"Status",    type:"select", options:["active","ended"]},
+    {name:"slipId",          label:"Slip",              type:"select", options:slipOpts},
+    {name:"customerId",      label:"Customer",          type:"select", options:custOpts},
+    {name:"start",           label:"Start date",        type:"date",   default:today()},
+    {name:"end",             label:"End date",          type:"date"},
+    {name:"rate",            label:"Rate ($/month)",    type:"number"},
+    {name:"billingInterval", label:"Billing interval",  type:"select", options:[
+      {value:"monthly",   label:"Monthly"},
+      {value:"bi-annual", label:"Bi-Annual (every 6 months)"},
+      {value:"annual",    label:"Annual"},
+    ], default:"monthly"},
+    {name:"paymentLink",     label:"Payment link (URL)", type:"text"},
+    {name:"paidThru",        label:"Paid through",      type:"date"},
+    {name:"status",          label:"Status",            type:"select", options:["active","ended"]},
   ], existing, data => {
     if (data.status === "active") {
       const conflict = findRentalConflict(data, existing && existing.id);
